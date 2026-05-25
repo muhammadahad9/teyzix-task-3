@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TeyzixDocs — Real-Time Collaborative Editor</title>
+<meta name="description" content="A real-time collaborative document editor with live sync, presence, cursors, version history and roles." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+/* ── DESIGN TOKENS ─────────────────────────────────────────── */
+:root {
+  /* Deep luxury navy + teal + amber palette */
+  --navy-900: #060d1f;
+  --navy-800: #0b1530;
+  --navy-700: #0f1e42;
+  --navy-600: #152554;
+  --teal-500: #0ea5c8;
+  --teal-400: #22d3ee;
+  --teal-300: #67e8f9;
+  --amber-500: #f59e0b;
+  --amber-400: #fbbf24;
+  --amber-300: #fcd34d;
+  --emerald:   #10b981;
+  --rose:      #f43f5e;
+  --violet:    #8b5cf6;
+
+  /* Semantic */
+  --bg:        var(--navy-900);
+  --surface:   var(--navy-800);
+  --surface-2: var(--navy-700);
+  --border:    rgba(14,165,200,.18);
+  --border-hi: rgba(14,165,200,.4);
+  --text:      #e8f0fe;
+  --text-dim:  #7a8fb5;
+  --brand:     var(--teal-500);
+  --brand-2:   var(--teal-400);
+  --accent:    var(--amber-400);
+  --success:   var(--emerald);
+  --danger:    var(--rose);
+  --warning:   var(--amber-500);
+  --glow:      0 0 30px rgba(14,165,200,.25);
+  --shadow:    0 20px 60px -15px rgba(0,0,0,.7);
+  --radius:    14px;
+
+  /* Light mode overrides */
+  &[data-theme="light"] {
+    --bg:        #f0f4ff;
+    --surface:   #ffffff;
+    --surface-2: #e8eef8;
+    --border:    rgba(15,23,80,.12);
+    --border-hi: rgba(14,165,200,.35);
+    --text:      #0b1530;
+    --text-dim:  #5a6a8a;
+    --glow:      0 0 20px rgba(14,165,200,.15);
+    --shadow:    0 12px 40px -10px rgba(15,23,80,.18);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── SCROLLBAR ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+
+/* ── TOP BAR ───────────────────────────────────────────────── */
+.topbar {
+  height: 64px;
+  background: linear-gradient(90deg, var(--surface) 0%, rgba(15,30,66,.95) 100%);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  gap: 1rem;
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 1.3rem;
+  background: linear-gradient(135deg, var(--teal-400), var(--amber-400));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.logo-dot { color: var(--amber-400); }
+.topbar .spacer { flex: 1; }
+.pill {
+  font-size: .75rem;
+  padding: .3rem .7rem;
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  letter-spacing: .3px;
+}
+.pill.online  { color: var(--success); border-color: rgba(16,185,129,.3); }
+.pill.offline { color: var(--danger);  border-color: rgba(244,63,94,.3); }
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: .45rem .75rem;
+  border-radius: 10px;
+  font-size: .85rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.icon-btn:hover { background: var(--surface-2); border-color: var(--border-hi); }
+
+.user-chip {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .3rem .75rem .3rem .3rem;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface-2);
+  transition: border-color .2s;
+}
+.user-chip:hover { border-color: var(--border-hi); }
+
+.avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: .75rem;
+  border: 2px solid rgba(255,255,255,.15);
+  flex-shrink: 0;
+}
+
+/* ── LOGIN SCREEN ──────────────────────────────────────────── */
+.login-wrap {
+  min-height: calc(100vh - 64px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+.login-bg-mesh {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 700px 500px at 15% 20%, rgba(14,165,200,.12) 0%, transparent 70%),
+    radial-gradient(ellipse 600px 500px at 85% 75%, rgba(245,158,11,.09) 0%, transparent 70%),
+    radial-gradient(ellipse 400px 300px at 50% 50%, rgba(139,92,246,.06) 0%, transparent 70%);
+}
+.login-grid-lines {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(14,165,200,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14,165,200,.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.login-card {
+  width: 100%; max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2.25rem;
+  box-shadow: var(--shadow), 0 0 0 1px rgba(14,165,200,.06);
+  position: relative;
+  animation: cardIn .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+.login-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--teal-500), var(--amber-400), var(--teal-400));
+  border-radius: 20px 20px 0 0;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(24px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.login-badge {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: rgba(14,165,200,.1); border: 1px solid rgba(14,165,200,.25);
+  color: var(--teal-400); padding: .3rem .75rem; border-radius: 99px;
+  font-size: .72rem; font-weight: 600; letter-spacing: .5px;
+  text-transform: uppercase; margin-bottom: 1rem;
+}
+.login-badge::before { content: '●'; font-size: .5rem; animation: blink 1.5s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.login-card h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.85rem; font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: .35rem;
+  background: linear-gradient(135deg, var(--text) 60%, var(--teal-400));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.login-card .lead {
+  color: var(--text-dim); font-size: .9rem; margin-bottom: 1.75rem;
+}
+
+.sso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-bottom: .75rem; }
+.sso-btn {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .65rem .8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600; font-size: .82rem;
+  cursor: pointer;
+  transition: all .2s ease;
+  font-family: inherit;
+}
+.sso-btn:hover {
+  border-color: var(--border-hi);
+  background: var(--navy-600);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+}
+.sso-btn.full-row { grid-column: 1/-1; }
+.sso-icon {
+  width: 18px; height: 18px; border-radius: 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+
+.divider {
+  display: flex; align-items: center; gap: .75rem;
+  color: var(--text-dim); font-size: .75rem; margin: 1rem 0;
+}
+.divider::before, .divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+.field { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .75rem; }
+.field label { font-size: .78rem; color: var(--text-dim); font-weight: 600; letter-spacing: .3px; }
+.field input, .field select, .field textarea {
+  padding: .65rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .92rem;
+  font-family: inherit;
+  transition: all .2s ease;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--teal-500);
+  box-shadow: 0 0 0 3px rgba(14,165,200,.15);
+  background: var(--surface);
+}
+.field input::placeholder { color: var(--text-dim); opacity: .7; }
+
+.btn-primary {
+  width: 100%;
+  padding: .8rem 1rem;
+  background: linear-gradient(135deg, var(--teal-500), var(--teal-400));
+  color: #fff; border: none; border-radius: 11px;
+  font-weight: 700; font-size: .95rem;
+  cursor: pointer;
+  transition: all .2s ease;
+  font-family: inherit;
+  letter-spacing: .2px;
+  position: relative; overflow: hidden;
+}
+.btn-primary::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(rgba(255,255,255,.1), transparent);
+}
+.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(14,165,200,.3); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: .55rem .9rem; border-radius: 9px; font-weight: 600;
+  cursor: pointer; font-family: inherit; font-size: .88rem;
+  transition: all .2s ease;
+}
+.btn-ghost:hover { background: var(--surface-2); border-color: var(--border-hi); }
+
+.btn-accent {
+  background: linear-gradient(135deg, var(--amber-500), var(--amber-400));
+  color: #0b1530; border: none;
+  padding: .65rem 1.1rem; border-radius: 10px; font-weight: 700;
+  cursor: pointer; font-family: inherit; font-size: .88rem;
+  transition: all .2s ease;
+}
+.btn-accent:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(244,63,94,.35);
+  color: var(--danger);
+  padding: .4rem .7rem; border-radius: 8px; font-weight: 600; font-size: .8rem;
+  cursor: pointer; font-family: inherit;
+  transition: all .2s ease;
+}
+.btn-danger:hover { background: rgba(244,63,94,.1); border-color: var(--danger); }
+
+.login-footer {
+  color: var(--text-dim); font-size: .72rem; margin: 1.25rem 0 0; text-align: center; line-height: 1.6;
+}
+
+/* ── LAYOUT ─────────────────────────────────────────────────── */
+.container { max-width: 1240px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* ── DASHBOARD ──────────────────────────────────────────────── */
+.dash-page {
+  animation: fadeUp .4s ease both;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dash-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem;
+}
+.dash-header-left h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.75rem; font-weight: 900; line-height: 1;
+  margin-bottom: .25rem;
+}
+.dash-header-left p { color: var(--text-dim); font-size: .88rem; }
+.dash-header-left .greeting-name { color: var(--teal-400); }
+
+/* stats row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.4rem;
+  display: flex; align-items: center; gap: 1rem;
+  box-shadow: var(--shadow);
+  transition: transform .2s ease, border-color .2s ease;
+  position: relative; overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.stat-card.teal::before  { background: linear-gradient(90deg, var(--teal-500), var(--teal-300)); }
+.stat-card.amber::before { background: linear-gradient(90deg, var(--amber-500), var(--amber-300)); }
+.stat-card.emerald::before { background: linear-gradient(90deg, var(--emerald), #34d399); }
+.stat-card.violet::before  { background: linear-gradient(90deg, var(--violet), #a78bfa); }
+
+.stat-card:hover { transform: translateY(-2px); border-color: var(--border-hi); }
+.stat-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.25rem; flex-shrink: 0;
+}
+.stat-icon.teal   { background: rgba(14,165,200,.15); }
+.stat-icon.amber  { background: rgba(245,158,11,.15); }
+.stat-icon.emerald{ background: rgba(16,185,129,.15); }
+.stat-icon.violet { background: rgba(139,92,246,.15); }
+.stat-info { flex: 1; min-width: 0; }
+.stat-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.65rem; font-weight: 900; line-height: 1;
+}
+.stat-label { color: var(--text-dim); font-size: .75rem; font-weight: 600; letter-spacing: .3px; margin-top: .2rem; text-transform: uppercase; }
+.stat-trend { font-size: .75rem; font-weight: 600; margin-top: .3rem; }
+.stat-trend.up   { color: var(--success); }
+.stat-trend.down { color: var(--danger); }
+.stat-trend.neu  { color: var(--text-dim); }
+
+/* section headers */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.section-title {
+  font-size: .75rem; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--text-dim);
+  display: flex; align-items: center; gap: .5rem;
+}
+.section-title::before {
+  content: '';
+  width: 3px; height: 14px; border-radius: 2px;
+  background: linear-gradient(var(--teal-500), var(--amber-400));
+  display: inline-block;
+}
+
+/* doc grid */
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.doc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem;
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: .55rem;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  cursor: pointer;
+  position: relative; overflow: hidden;
+}
+.doc-card::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(14,165,200,.03), transparent);
+  opacity: 0; transition: opacity .2s;
+}
+.doc-card:hover { transform: translateY(-3px); border-color: var(--border-hi); box-shadow: var(--shadow), var(--glow); }
+.doc-card:hover::after { opacity: 1; }
+.doc-card h3 { font-size: .98rem; font-weight: 700; line-height: 1.3; }
+.doc-card .meta { color: var(--text-dim); font-size: .75rem; }
+.doc-card .actions { display: flex; gap: .4rem; margin-top: auto; flex-wrap: wrap; }
+.role-badge {
+  display: inline-block; padding: .15rem .55rem; border-radius: 99px;
+  font-size: .68rem; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+}
+.role-owner  { color: #0b1530; background: var(--teal-400); }
+.role-editor { color: #0b1530; background: var(--emerald); }
+.role-viewer { color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border); }
+
+.doc-card-icon {
+  font-size: 1.5rem; margin-bottom: .2rem;
+  width: 40px; height: 40px;
+  background: var(--surface-2); border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.empty {
+  text-align: center; padding: 3.5rem 1rem;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  grid-column: 1/-1;
+}
+.empty h3 { font-size: 1rem; color: var(--text); margin-bottom: .4rem; }
+
+/* ── RECORDS TABLE ──────────────────────────────────────────── */
+.records-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+.records-toolbar {
+  display: flex; align-items: center; gap: .75rem; padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.records-search {
+  flex: 1; min-width: 160px;
+  padding: .5rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .85rem;
+  font-family: inherit;
+  transition: all .2s;
+}
+.records-search:focus { outline: none; border-color: var(--teal-500); box-shadow: 0 0 0 2px rgba(14,165,200,.12); }
+.records-search::placeholder { color: var(--text-dim); }
+
+.filter-chip {
+  padding: .35rem .75rem;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: .76rem; font-weight: 600;
+  cursor: pointer; transition: all .2s; font-family: inherit;
+}
+.filter-chip:hover, .filter-chip.active {
+  border-color: var(--teal-500);
+  background: rgba(14,165,200,.1);
+  color: var(--teal-400);
+}
+
+.table-scroll { overflow-x: auto; }
+table.rec-table {
+  width: 100%; border-collapse: collapse; min-width: 600px;
+}
+.rec-table thead tr {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.rec-table thead th {
+  padding: .75rem 1.25rem;
+  text-align: left;
+  font-size: .72rem; font-weight: 700; letter-spacing: .6px;
+  text-transform: uppercase; color: var(--text-dim);
+  white-space: nowrap;
+  cursor: pointer; user-select: none;
+}
+.rec-table thead th:hover { color: var(--teal-400); }
+.rec-table thead th .sort-arrow { opacity: .4; margin-left: .3rem; }
+.rec-table thead th.sorted .sort-arrow { opacity: 1; color: var(--teal-400); }
+
+.rec-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background .15s;
+}
+.rec-table tbody tr:last-child { border-bottom: none; }
+.rec-table tbody tr:hover { background: rgba(14,165,200,.04); }
+.rec-table td {
+  padding: .85rem 1.25rem;
+  font-size: .86rem;
+  vertical-align: middle;
+}
+.rec-table td .doc-thumb {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: var(--surface-2);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .8rem; margin-right: .5rem;
+  vertical-align: middle; flex-shrink: 0;
+}
+.rec-table td .doc-name { font-weight: 600; }
+.status-badge {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .2rem .6rem; border-radius: 99px; font-size: .72rem; font-weight: 600;
+}
+.status-badge.active   { background: rgba(16,185,129,.12);  color: var(--emerald); }
+.status-badge.draft    { background: rgba(245,158,11,.12);   color: var(--amber-400); }
+.status-badge.archived { background: rgba(122,143,181,.12);  color: var(--text-dim); }
+.status-badge::before { content: '●'; font-size: .45rem; }
+
+.collab-stack { display: flex; }
+.collab-stack .avatar-mini {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--surface);
+  margin-left: -6px; font-size: .58rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700;
+}
+.collab-stack .avatar-mini:first-child { margin-left: 0; }
+
+.table-actions { display: flex; gap: .4rem; }
+.tbl-btn {
+  padding: .3rem .6rem; border-radius: 7px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); font-size: .72rem; cursor: pointer;
+  transition: all .15s; font-family: inherit;
+}
+.tbl-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-hi); }
+.tbl-btn.open  { color: var(--teal-400); border-color: rgba(14,165,200,.3); }
+.tbl-btn.open:hover { background: rgba(14,165,200,.1); }
+
+.records-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: .78rem; color: var(--text-dim);
+  flex-wrap: wrap; gap: .5rem;
+}
+.pagination { display: flex; gap: .3rem; }
+.page-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-dim);
+  font-size: .78rem; cursor: pointer; transition: all .15s;
+}
+.page-btn:hover, .page-btn.active {
+  border-color: var(--teal-500);
+  background: rgba(14,165,200,.1); color: var(--teal-400);
+}
+
+/* ── EDITOR LAYOUT ──────────────────────────────────────────── */
+.editor-shell {
+  display: grid;
+  grid-template-columns: 1fr 290px;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  max-width: 1400px; margin: 0 auto;
+}
+@media (max-width: 900px) { .editor-shell { grid-template-columns: 1fr; } }
+
+.editor-main {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+  min-height: 70vh;
+}
+
+.editor-toolbar {
+  display: flex; flex-wrap: wrap; gap: .3rem;
+  padding-bottom: .85rem; margin-bottom: .85rem;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+.editor-toolbar button {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: .35rem .65rem;
+  border-radius: 7px;
+  font-size: .85rem;
+  min-width: 34px;
+  cursor: pointer;
+  transition: all .15s;
+  font-family: inherit;
+}
+.editor-toolbar button:hover { background: var(--surface); border-color: var(--teal-500); color: var(--teal-400); }
+
+.editor-title {
+  width: 100%;
+  border: none; outline: none; background: transparent;
+  color: var(--text); font-size: 1.5rem; font-weight: 700;
+  padding: .25rem 0; margin-bottom: .3rem;
+  font-family: 'Playfair Display', serif;
+}
+.editor-title::placeholder { color: var(--text-dim); opacity: .6; }
+
+.editor-meta {
+  display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+  color: var(--text-dim); font-size: .78rem; margin-bottom: .6rem;
+}
+
+.save-status { display: inline-flex; align-items: center; gap: .35rem; }
+.save-status .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success);
+}
+.save-status.saving .dot { background: var(--warning); animation: pulse 1s infinite; }
+.save-status.error  .dot { background: var(--danger); }
+@keyframes pulse { 50%{ opacity: .3; } }
+
+#editor {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem; line-height: 1.7;
+  overflow: auto; min-height: 300px;
+  position: relative;
+  transition: border-color .2s;
+}
+#editor:focus { outline: none; border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(14,165,200,.1); }
+#editor[contenteditable="false"] { background: var(--surface-2); cursor: not-allowed; }
+#editor h1 { font-size: 1.7rem; margin: .7rem 0 .4rem; font-family: 'Playfair Display', serif; }
+#editor h2 { font-size: 1.3rem; margin: .6rem 0 .35rem; }
+#editor h3 { font-size: 1.1rem; margin: .5rem 0 .3rem; }
+#editor blockquote {
+  border-left: 3px solid var(--teal-500);
+  margin: .6rem 0; padding: .3rem .9rem;
+  color: var(--text-dim); background: var(--surface-2);
+  border-radius: 0 8px 8px 0; font-style: italic;
+}
+
+/* remote cursor */
+.remote-cursor {
+  position: absolute; width: 2px; pointer-events: none; z-index: 5;
+}
+.remote-cursor .flag {
+  position: absolute; top: -19px; left: 0;
+  font-size: .62rem; color: #fff;
+  padding: 2px 7px; border-radius: 5px 5px 5px 0;
+  white-space: nowrap; font-weight: 600;
+}
+
+/* ── SIDE PANEL ─────────────────────────────────────────────── */
+.side-panel { display: flex; flex-direction: column; gap: 1rem; }
+.panel-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+.panel-card h4 {
+  margin: 0 0 .65rem;
+  font-size: .72rem; text-transform: uppercase;
+  letter-spacing: .7px; color: var(--text-dim); font-weight: 700;
+}
+
+.tabs {
+  display: flex; gap: .2rem;
+  background: var(--surface-2);
+  padding: .25rem; border-radius: 9px;
+  margin-bottom: .75rem;
+}
+.tabs button {
+  flex: 1; background: transparent; border: none;
+  padding: .45rem .5rem; color: var(--text-dim);
+  font-weight: 600; font-size: .78rem; border-radius: 7px;
+  cursor: pointer; transition: all .18s; font-family: inherit;
+}
+.tabs button.active {
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.presence-list { display: flex; flex-direction: column; gap: .5rem; }
+.presence-item {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .45rem .6rem; border-radius: 9px; background: var(--surface-2);
+}
+.presence-item .status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success); margin-left: auto;
+}
+.presence-item.offline .status-dot { background: var(--text-dim); }
+.presence-item .name { font-size: .86rem; font-weight: 600; }
+.presence-item .role { font-size: .7rem; color: var(--text-dim); }
+
+.history-item, .comment-item, .chat-msg {
+  padding: .6rem .7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  margin-bottom: .5rem;
+  font-size: .82rem;
+}
+.history-item .when, .comment-item .when, .chat-msg .when {
+  color: var(--text-dim); font-size: .68rem;
+}
+.history-item button {
+  margin-top: .35rem; font-size: .7rem;
+  padding: .28rem .6rem;
+  background: var(--teal-500); color: #fff;
+  border: none; border-radius: 6px; cursor: pointer; font-family: inherit;
+  transition: filter .15s;
+}
+.history-item button:hover { filter: brightness(1.1); }
+
+.chat-input { display: flex; gap: .4rem; margin-top: .5rem; }
+.chat-input input {
+  flex: 1; padding: .5rem .65rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); color: var(--text);
+  font-family: inherit; font-size: .85rem;
+  transition: border-color .2s;
+}
+.chat-input input:focus { outline: none; border-color: var(--teal-500); }
+.chat-input button {
+  padding: .5rem .85rem;
+  background: var(--teal-500); color: #fff;
+  border: none; border-radius: 8px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: filter .15s;
+}
+.chat-input button:hover { filter: brightness(1.1); }
+.chat-list, .comments-list, .history-list { max-height: 240px; overflow-y: auto; }
+
+/* ── MODAL ──────────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(6,13,31,.7);
+  backdrop-filter: blur(6px);
+  display: none; align-items: center; justify-content: center;
+  z-index: 100; padding: 1rem;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.75rem;
+  width: 100%; max-width: 480px;
+  box-shadow: var(--shadow);
+  animation: modalIn .25s cubic-bezier(.34,1.4,.64,1) both;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal h3 { font-family: 'Playfair Display', serif; font-size: 1.25rem; margin: 0 0 .3rem; }
+.modal p.sub { color: var(--text-dim); margin: 0 0 1.25rem; font-size: .86rem; }
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem;
+}
+.invite-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-2); padding: .55rem .8rem;
+  border-radius: 9px; margin-bottom: .4rem; font-size: .84rem;
+  border: 1px solid var(--border);
+}
+.invite-link {
+  background: var(--surface-2);
+  border: 1px dashed var(--border-hi);
+  padding: .6rem .8rem; border-radius: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .72rem; word-break: break-all; color: var(--teal-300);
+}
+
+/* ── TOAST ──────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem;
+  background: var(--navy-700);
+  color: var(--text);
+  border: 1px solid var(--border-hi);
+  padding: .75rem 1.1rem; border-radius: 11px;
+  box-shadow: var(--shadow);
+  font-size: .86rem; font-weight: 500;
+  transform: translateY(20px); opacity: 0;
+  transition: all .3s cubic-bezier(.34,1.4,.64,1);
+  z-index: 200; max-width: 320px;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body data-theme="dark">
+
+<!-- ══════════════ TOP BAR ══════════════ -->
+<header class="topbar">
+  <div class="logo">Teyzix<span class="logo-dot">·</span>Docs</div>
+  <span id="connectionPill" class="pill online">● Online</span>
+  <span id="viewLabel" class="pill">Dashboard</span>
+  <div class="spacer"></div>
+  <button id="themeToggle" class="icon-btn" title="Toggle theme">☀️</button>
+  <button id="backBtn" class="icon-btn hidden">← Dashboard</button>
+  <div id="userArea" class="hidden">
+    <div class="user-chip">
+      <span id="userAvatar" class="avatar">?</span>
+      <span id="userName" style="font-size:.84rem; font-weight:600;">Guest</span>
+      <button id="logoutBtn" class="icon-btn" style="padding:.25rem .55rem; font-size:.78rem;">Logout</button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════ LOGIN SCREEN ══════════════ -->
+<section id="loginScreen" class="login-wrap">
+  <div class="login-bg-mesh"></div>
+  <div class="login-grid-lines"></div>
+  <div class="login-card">
+    <div class="login-badge">Live Collaboration</div>
+    <h1>Welcome back</h1>
+    <p class="lead">Sign in to start editing documents in real time with your team.</p>
+
+    <div class="sso-grid">
+      <button class="sso-btn" data-sso="google">
+        <span class="sso-icon" style="background:#ea4335;">G</span> Google
+      </button>
+      <button class="sso-btn" data-sso="github">
+        <span class="sso-icon" style="background:#24292f;">⌥</span> GitHub
+      </button>
+      <button class="sso-btn full-row" data-sso="microsoft">
+        <span class="sso-icon" style="background:#0078d4;">⊞</span> Continue with Microsoft
+      </button>
+    </div>
+
+    <div class="divider">or use email</div>
+
+    <div class="field">
+      <label>Full Name</label>
+      <input id="loginName" type="text" placeholder="e.g. Sara Khan" />
+    </div>
+    <div class="field">
+      <label>Email Address</label>
+      <input id="loginEmail" type="email" placeholder="you@company.com" />
+    </div>
+    <button id="loginBtn" class="btn-primary">Sign In →</button>
+
+    <p class="login-footer">
+      Open this page in a second tab and sign in with a different name<br>
+      to test live multi-user collaboration.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════ DASHBOARD ══════════════ -->
+<section id="dashboardScreen" class="container dash-page hidden">
+
+  <div class="dash-header">
+    <div class="dash-header-left">
+      <h2>Good day, <span class="greeting-name" id="greetingName">there</span> 👋</h2>
+      <p>All your documents and the ones shared with you.</p>
+    </div>
+    <button id="newDocBtn" class="btn-accent">+ New Document</button>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card teal">
+      <div class="stat-icon teal">📄</div>
+      <div class="stat-info">
+        <div class="stat-value" id="statDocs">0</div>
+        <div class="stat-label">Total Docs</div>
+        <div class="stat-trend up" id="statDocsTrend">↑ All yours</div>
+      </div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-icon amber">✏️</div>
+      <div class="stat-info">
+        <div class="stat-value" id="statEditing">0</div>
+        <div class="stat-label">You Own</div>
+        <div class="stat-trend neu" id="statEditingTrend">Owner rights</div>
+      </div>
+    </div>
+    <div class="stat-card emerald">
+      <div class="stat-icon emerald">🤝</div>
+      <div class="stat-info">
+        <div class="stat-value" id="statShared">0</div>
+        <div class="stat-label">Shared With You</div>
+        <div class="stat-trend up" id="statSharedTrend">Collaborating</div>
+      </div>
+    </div>
+    <div class="stat-card violet">
+      <div class="stat-icon violet">🕐</div>
+      <div class="stat-info">
+        <div class="stat-value" id="statVersions">0</div>
+        <div class="stat-label">Versions Saved</div>
+        <div class="stat-trend neu">Across all docs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent docs grid -->
+  <div class="section-header">
+    <span class="section-title">Recent Documents</span>
+  </div>
+  <div id="docGrid" class="doc-grid"></div>
+
+  <!-- All Records Table -->
+  <div class="section-header">
+    <span class="section-title">All Records</span>
+    <button class="filter-chip" id="exportBtn">⬇ Export CSV</button>
+  </div>
+  <div class="records-wrap">
+    <div class="records-toolbar">
+      <input class="records-search" id="tableSearch" type="text" placeholder="🔍  Search documents…" />
+      <button class="filter-chip active" data-filter="all">All</button>
+      <button class="filter-chip" data-filter="owner">Owner</button>
+      <button class="filter-chip" data-filter="editor">Shared</button>
+    </div>
+    <div class="table-scroll">
+      <table class="rec-table">
+        <thead>
+          <tr>
+            <th data-sort="title">Document <span class="sort-arrow">↕</span></th>
+            <th data-sort="role">Role <span class="sort-arrow">↕</span></th>
+            <th data-sort="status">Status <span class="sort-arrow">↕</span></th>
+            <th data-sort="versions">Versions <span class="sort-arrow">↕</span></th>
+            <th data-sort="updated">Last Updated <span class="sort-arrow">↕</span></th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recordsTbody"></tbody>
+      </table>
+    </div>
+    <div class="records-footer">
+      <span id="recordsCount">0 documents</span>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════ EDITOR ══════════════ -->
+<section id="editorScreen" class="hidden">
+  <div class="editor-shell">
+
+    <!-- main editor -->
+    <div class="editor-main">
+      <input id="docTitle" class="editor-title" placeholder="Untitled document…" />
+
+      <div class="editor-meta">
+        <span id="saveStatus" class="save-status"><span class="dot"></span><span class="txt">Saved</span></span>
+        <span>·</span>
+        <span id="docRoleLabel">Editor</span>
+        <span>·</span>
+        <span id="docOwnerLabel">Owner: —</span>
+        <span style="flex:1;"></span>
+        <button id="shareBtn" class="btn-ghost" style="font-size:.82rem; padding:.4rem .85rem;">🔗 Share</button>
+      </div>
+
+      <div class="editor-toolbar" id="toolbar">
+        <button data-cmd="bold" title="Bold"><b>B</b></button>
+        <button data-cmd="italic" title="Italic"><i>I</i></button>
+        <button data-cmd="underline" title="Underline"><u>U</u></button>
+        <button data-cmd="strikeThrough" title="Strike"><s>S</s></button>
+        <button data-block="h1">H1</button>
+        <button data-block="h2">H2</button>
+        <button data-block="h3">H3</button>
+        <button data-block="p">¶</button>
+        <button data-cmd="insertUnorderedList">• List</button>
+        <button data-cmd="insertOrderedList">1. List</button>
+        <button data-block="blockquote">❝</button>
+        <button data-cmd="removeFormat">⨯ Clear</button>
+      </div>
+
+      <div id="editor" contenteditable="true" spellcheck="true"></div>
+    </div>
+
+    <!-- side panel -->
+    <aside class="side-panel">
+      <div class="panel-card">
+        <h4>Active Users</h4>
+        <div id="presenceList" class="presence-list"></div>
+      </div>
+
+      <div class="panel-card">
+        <div class="tabs">
+          <button class="active" data-tab="history">History</button>
+          <button data-tab="comments">Notes</button>
+          <button data-tab="chat">Chat</button>
+        </div>
+
+        <div id="tab-history" class="tab-pane active">
+          <div id="historyList" class="history-list"></div>
+          <button id="snapshotBtn" class="btn-ghost" style="width:100%; margin-top:.5rem; font-size:.82rem;">
+            📌 Save version
+          </button>
+        </div>
+
+        <div id="tab-comments" class="tab-pane">
+          <div id="commentsList" class="comments-list"></div>
+          <div class="chat-input">
+            <input id="commentInput" placeholder="Add a note…" />
+            <button id="commentSend">Post</button>
+          </div>
+        </div>
+
+        <div id="tab-chat" class="tab-pane">
+          <div id="chatList" class="chat-list"></div>
+          <div class="chat-input">
+            <input id="chatInput" placeholder="Message team…" />
+            <button id="chatSend">Send</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ══════════════ SHARE MODAL ══════════════ -->
+<div id="shareModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>Share Document</h3>
+    <p class="sub">Invite teammates by email or copy a shareable link.</p>
+    <div class="field">
+      <label>Invite by email</label>
+      <div style="display:flex; gap:.4rem;">
+        <input id="inviteEmail" type="email" placeholder="teammate@company.com" />
+        <select id="inviteRole" style="max-width:115px;">
+          <option value="editor">Can edit</option>
+          <option value="viewer">View only</option>
+        </select>
+        <button id="inviteSend" class="btn-ghost">Invite</button>
+      </div>
+    </div>
+    <div id="inviteList" style="margin-top:.5rem;"></div>
+    <div class="field" style="margin-top:1rem;">
+      <label>Shareable link</label>
+      <div class="invite-link" id="inviteLink">—</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('shareModal')">Close</button>
+      <button class="btn-primary" style="width:auto; padding:.55rem 1.1rem;" id="copyLinkBtn">Copy link</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ RENAME MODAL ══════════════ -->
+<div id="renameModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>Rename Document</h3>
+    <div class="field" style="margin-top:.75rem;">
+      <label>New title</label>
+      <input id="renameInput" type="text" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('renameModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto; padding:.55rem 1.1rem;" id="renameSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ==========================================================================
+   APP STATE + STORAGE
+   ========================================================================== */
+const STORAGE_KEY = "teyzixdocs.state.v2";
+const SESSION_KEY = "teyzixdocs.session.v2";
+
+function defaultState() {
+  return { users: {}, docs: {} };
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : defaultState();
+  } catch(e) { return defaultState(); }
+}
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+let state        = loadState();
+let session      = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+let currentDocId = null;
+let saveTimer    = null;
+let isRemoteUpdate = false;
+let presenceTimer  = null;
+
+// table state
+let tableFilter  = "all";
+let tableSortCol = "updated";
+let tableSortDir = -1; // -1 desc
+let tablePage    = 1;
+const TABLE_PAGE_SIZE = 6;
+
+const channel = ("BroadcastChannel" in window)
+  ? new BroadcastChannel("teyzixdocs-room-v2")
+  : null;
+
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+function uid(p="id") { return p+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3); }
+function fmtTime(ts) {
+  const d = new Date(ts), today = new Date();
+  return d.toDateString()===today.toDateString()
+    ? d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})
+    : d.toLocaleDateString()+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+function fmtDate(ts) {
+  return new Date(ts).toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"});
+}
+function initials(name) {
+  return name.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("")||"?";
+}
+function colorFromString(str) {
+  let h=0;
+  for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))&0xffffffff;
+  return `hsl(${Math.abs(h)%360} 65% 58%)`;
+}
+function toast(msg) {
+  const el=$("#toast");
+  el.textContent=msg; el.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>el.classList.remove("show"),2400);
+}
+function openModal(id)  { $("#"+id).classList.add("open"); }
+function closeModal(id) { $("#"+id).classList.remove("open"); }
+window.closeModal=closeModal;
+
+function escapeHtml(s) {
+  return String(s??"").replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+/* ==========================================================================
+   AUTH
+   ========================================================================== */
+function fakeJwt(payload) {
+  const h = btoa(JSON.stringify({alg:"demo",typ:"JWT"}));
+  const b = btoa(JSON.stringify({...payload, iat:Date.now()}));
+  return `${h}.${b}.sig_${Math.random().toString(36).slice(2,10)}`;
+}
+
+function signIn({name, email, provider}) {
+  if(!name||!email){ toast("Please enter your name and email."); return; }
+  const userId="u_"+btoa(email.toLowerCase()).replace(/[^a-zA-Z0-9]/g,"").slice(0,14);
+  if(!state.users[userId]) {
+    state.users[userId]={id:userId,name,email,provider,color:colorFromString(userId)};
+  } else {
+    state.users[userId].name=name;
+    state.users[userId].provider=provider;
+  }
+  saveState();
+  session={userId, token:fakeJwt({sub:userId,email,provider})};
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  enterApp();
+}
+function signOut() {
+  if(currentDocId) leaveDoc();
+  localStorage.removeItem(SESSION_KEY);
+  session=null; showLogin();
+}
+function currentUser() { return session?state.users[session.userId]:null; }
+
+/* ==========================================================================
+   NAVIGATION
+   ========================================================================== */
+function showLogin() {
+  $("#loginScreen").classList.remove("hidden");
+  $("#dashboardScreen").classList.add("hidden");
+  $("#editorScreen").classList.add("hidden");
+  $("#userArea").classList.add("hidden");
+  $("#backBtn").classList.add("hidden");
+  $("#viewLabel").textContent="Sign in";
+}
+
+function enterApp() {
+  const u=currentUser();
+  $("#loginScreen").classList.add("hidden");
+  $("#userArea").classList.remove("hidden");
+  $("#userName").textContent=u.name;
+  $("#userAvatar").textContent=initials(u.name);
+  $("#userAvatar").style.background=u.color;
+  $("#greetingName").textContent=u.name.split(" ")[0];
+  showDashboard();
+}
+
+function showDashboard() {
+  if(currentDocId) leaveDoc();
+  $("#dashboardScreen").classList.remove("hidden");
+  $("#editorScreen").classList.add("hidden");
+  $("#backBtn").classList.add("hidden");
+  $("#viewLabel").textContent="Dashboard";
+  renderDashboard();
+
+  const params=new URLSearchParams(location.search);
+  const invite=params.get("invite");
+  const role=params.get("role")||"editor";
+  if(invite&&state.docs[invite]) {
+    acceptInvite(invite,role);
+    history.replaceState({}, "", location.pathname);
+  }
+}
+
+function openDoc(docId) {
+  const doc=state.docs[docId];
+  if(!doc){toast("Document not found.");return;}
+  if(!canView(doc)){toast("You do not have access to this document.");return;}
+  currentDocId=docId;
+  $("#dashboardScreen").classList.add("hidden");
+  $("#editorScreen").classList.remove("hidden");
+  $("#backBtn").classList.remove("hidden");
+  $("#viewLabel").textContent="Editing";
+  renderEditor(); startPresence();
+  broadcast({type:"presence:join",docId,user:publicUser()});
+}
+
+function leaveDoc() {
+  if(!currentDocId) return;
+  broadcast({type:"presence:leave",docId:currentDocId,userId:session.userId});
+  stopPresence(); currentDocId=null;
+}
+
+/* ==========================================================================
+   DASHBOARD
+   ========================================================================== */
+function userDocs() {
+  if(!session) return [];
+  return Object.values(state.docs)
+    .filter(d=>d.ownerId===session.userId||d.permissions[session.userId])
+    .sort((a,b)=>b.updatedAt-a.updatedAt);
+}
+function roleFor(doc,userId=session?.userId) {
+  if(!doc||!userId) return null;
+  if(doc.ownerId===userId) return "owner";
+  return doc.permissions[userId]||null;
+}
+function canView(doc){ return !!roleFor(doc); }
+function canEdit(doc){ const r=roleFor(doc); return r==="owner"||r==="editor"; }
+
+function docStatus(doc) {
+  const daysSince=(Date.now()-doc.updatedAt)/(1000*60*60*24);
+  if(daysSince<1) return "active";
+  if(daysSince<7) return "draft";
+  return "archived";
+}
+
+function renderDashboard() {
+  renderStats();
+  renderDocGrid();
+  renderRecordsTable();
+}
+
+function renderStats() {
+  const docs=userDocs();
+  const owned=docs.filter(d=>d.ownerId===session.userId);
+  const shared=docs.filter(d=>d.ownerId!==session.userId);
+  const versions=docs.reduce((s,d)=>s+(d.history?.length||0),0);
+
+  $("#statDocs").textContent=docs.length;
+  $("#statEditing").textContent=owned.length;
+  $("#statShared").textContent=shared.length;
+  $("#statVersions").textContent=versions;
+  $("#statDocsTrend").textContent=docs.length===0?"Create your first →":"↑ Total across all";
+  $("#statSharedTrend").textContent=shared.length>0?"Active collaboration":"No shared docs yet";
+}
+
+function renderDocGrid() {
+  const grid=$("#docGrid");
+  const docs=userDocs().slice(0,6);
+  if(docs.length===0) {
+    grid.innerHTML=`
+      <div class="empty" style="grid-column:1/-1;">
+        <h3>📄 No documents yet</h3>
+        <p>Click <strong>+ New Document</strong> to create your first one.</p>
+      </div>`;
+    return;
+  }
+  grid.innerHTML=docs.map(d=>{
+    const r=roleFor(d);
+    const owner=state.users[d.ownerId];
+    const icons=["📄","📝","📑","🗒️","📃","📋"];
+    const icon=icons[parseInt(d.id.slice(-1),36)%icons.length];
+    return `
+      <article class="doc-card">
+        <div class="doc-card-icon">${icon}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;">
+          <h3>${escapeHtml(d.title||"Untitled")}</h3>
+          <span class="role-badge role-${r}">${r}</span>
+        </div>
+        <div class="meta">Owner: ${escapeHtml(owner?owner.name:"Unknown")}</div>
+        <div class="meta">Updated ${fmtTime(d.updatedAt)}</div>
+        <div class="actions">
+          <button class="btn-ghost" style="font-size:.8rem;padding:.38rem .7rem;" data-open="${d.id}">Open</button>
+          ${r==="owner"?`
+            <button class="btn-ghost" style="font-size:.8rem;padding:.38rem .7rem;" data-rename="${d.id}">Rename</button>
+            <button class="btn-danger" data-delete="${d.id}">Delete</button>
+          `:""}
+        </div>
+      </article>`;
+  }).join("");
+
+  grid.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openDoc(b.dataset.open)));
+  grid.querySelectorAll("[data-rename]").forEach(b=>b.addEventListener("click",()=>askRename(b.dataset.rename)));
+  grid.querySelectorAll("[data-delete]").forEach(b=>b.addEventListener("click",()=>deleteDoc(b.dataset.delete)));
+}
+
+/* ── Records Table ── */
+function getFilteredDocs() {
+  const docs=userDocs();
+  const search=$("#tableSearch")?.value.trim().toLowerCase()||"";
+  return docs.filter(d=>{
+    const r=roleFor(d);
+    const matchFilter=
+      tableFilter==="all"||
+      (tableFilter==="owner"&&r==="owner")||
+      (tableFilter==="editor"&&r!=="owner");
+    const matchSearch=!search||
+      (d.title||"").toLowerCase().includes(search)||
+      (state.users[d.ownerId]?.name||"").toLowerCase().includes(search);
+    return matchFilter&&matchSearch;
+  }).sort((a,b)=>{
+    let va,vb;
+    if(tableSortCol==="title"){ va=(a.title||"").toLowerCase(); vb=(b.title||"").toLowerCase(); }
+    else if(tableSortCol==="updated"){ va=a.updatedAt; vb=b.updatedAt; }
+    else if(tableSortCol==="versions"){ va=a.history?.length||0; vb=b.history?.length||0; }
+    else if(tableSortCol==="role"){ va=roleFor(a)||""; vb=roleFor(b)||""; }
+    else { va=docStatus(a); vb=docStatus(b); }
+    if(va<vb) return -1*tableSortDir;
+    if(va>vb) return  1*tableSortDir;
+    return 0;
+  });
+}
+
+function renderRecordsTable() {
+  const filtered=getFilteredDocs();
+  const total=filtered.length;
+  const pages=Math.max(1,Math.ceil(total/TABLE_PAGE_SIZE));
+  if(tablePage>pages) tablePage=pages;
+  const slice=filtered.slice((tablePage-1)*TABLE_PAGE_SIZE, tablePage*TABLE_PAGE_SIZE);
+
+  $("#recordsCount").textContent=`${total} document${total!==1?"s":""}`;
+
+  const tbody=$("#recordsTbody");
+  if(slice.length===0) {
+    tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:2rem;">No records found.</td></tr>`;
+  } else {
+    tbody.innerHTML=slice.map(d=>{
+      const r=roleFor(d);
+      const owner=state.users[d.ownerId];
+      const status=docStatus(d);
+      const versions=d.history?.length||0;
+      const collabs=Object.keys(d.permissions||{});
+      const collabHtml=collabs.slice(0,3).map(uid=>{
+        const u=state.users[uid];
+        const col=u?u.color:colorFromString(uid);
+        return `<span class="avatar-mini" style="background:${col};">${u?initials(u.name):"?"}</span>`;
+      }).join("")+(collabs.length>3?`<span class="avatar-mini" style="background:var(--surface-2);color:var(--text-dim);">+${collabs.length-3}</span>`:"");
+
+      return `<tr>
+        <td>
+          <span class="doc-thumb">📄</span>
+          <span class="doc-name">${escapeHtml(d.title||"Untitled")}</span>
+        </td>
+        <td><span class="role-badge role-${r}">${r}</span></td>
+        <td><span class="status-badge ${status}">${status}</span></td>
+        <td>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:.82rem;">${versions}</span>
+          ${versions>0?`<span style="color:var(--text-dim);font-size:.72rem;"> saved</span>`:""}
+        </td>
+        <td style="color:var(--text-dim);">${fmtDate(d.updatedAt)}</td>
+        <td>
+          <div class="table-actions">
+            <button class="tbl-btn open" data-open="${d.id}">Open →</button>
+            ${r==="owner"?`<button class="tbl-btn" data-rename="${d.id}">Rename</button><button class="tbl-btn" data-delete="${d.id}" style="color:var(--danger);">Delete</button>`:""}
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    tbody.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openDoc(b.dataset.open)));
+    tbody.querySelectorAll("[data-rename]").forEach(b=>b.addEventListener("click",()=>askRename(b.dataset.rename)));
+    tbody.querySelectorAll("[data-delete]").forEach(b=>b.addEventListener("click",()=>deleteDoc(b.dataset.delete)));
+  }
+
+  // pagination
+  const pag=$("#pagination");
+  pag.innerHTML="";
+  for(let i=1;i<=pages;i++) {
+    const btn=document.createElement("button");
+    btn.className="page-btn"+(i===tablePage?" active":"");
+    btn.textContent=i;
+    btn.addEventListener("click",()=>{ tablePage=i; renderRecordsTable(); });
+    pag.appendChild(btn);
+  }
+
+  // update sort arrows
+  $$(".rec-table thead th[data-sort]").forEach(th=>{
+    th.classList.toggle("sorted",th.dataset.sort===tableSortCol);
+    const arrow=th.querySelector(".sort-arrow");
+    if(arrow) arrow.textContent=th.dataset.sort===tableSortCol?(tableSortDir===1?"↑":"↓"):"↕";
+  });
+}
+
+// table sort/filter/search wiring
+document.addEventListener("DOMContentLoaded",()=>{});
+// Immediate wiring for table events (after DOM ready)
+function wireTable() {
+  $$(".rec-table thead th[data-sort]").forEach(th=>{
+    th.addEventListener("click",()=>{
+      if(tableSortCol===th.dataset.sort) tableSortDir*=-1;
+      else { tableSortCol=th.dataset.sort; tableSortDir=-1; }
+      tablePage=1; renderRecordsTable();
+    });
+  });
+  $$("[data-filter]").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      tableFilter=btn.dataset.filter; tablePage=1;
+      $$("[data-filter]").forEach(b=>b.classList.toggle("active",b===btn));
+      renderRecordsTable();
+    });
+  });
+  $("#tableSearch")?.addEventListener("input",()=>{ tablePage=1; renderRecordsTable(); });
+  $("#exportBtn")?.addEventListener("click",exportCSV);
+}
+// call after script finishes
+setTimeout(wireTable, 0);
+
+function exportCSV() {
+  const docs=getFilteredDocs();
+  const rows=[["Title","Role","Status","Versions","Owner","Last Updated"]];
+  docs.forEach(d=>{
+    rows.push([
+      d.title||"Untitled",
+      roleFor(d)||"",
+      docStatus(d),
+      d.history?.length||0,
+      state.users[d.ownerId]?.name||"Unknown",
+      new Date(d.updatedAt).toISOString()
+    ]);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:"teyzixdocs-export.csv"});
+  a.click(); toast("CSV exported!");
+}
+
+/* ==========================================================================
+   DOC ACTIONS
+   ========================================================================== */
+function createDoc() {
+  const id=uid("doc"); const now=Date.now();
+  state.docs[id]={
+    id, title:"Untitled document",
+    ownerId:session.userId,
+    content:"<p>Start writing here...</p>",
+    createdAt:now, updatedAt:now,
+    permissions:{}, history:[], comments:[], chat:[],
+  };
+  saveState(); openDoc(id);
+}
+
+function deleteDoc(docId) {
+  const d=state.docs[docId];
+  if(!d||d.ownerId!==session.userId) return;
+  if(!confirm(`Delete "${d.title}"? This cannot be undone.`)) return;
+  delete state.docs[docId]; saveState();
+  broadcast({type:"doc:deleted",docId});
+  renderDashboard(); toast("Document deleted.");
+}
+
+function askRename(docId) {
+  const d=state.docs[docId];
+  if(!d) return;
+  $("#renameInput").value=d.title;
+  $("#renameInput").dataset.target=docId;
+  openModal("renameModal");
+  setTimeout(()=>$("#renameInput").focus(),50);
+}
+
+/* ==========================================================================
+   EDITOR
+   ========================================================================== */
+function publicUser() {
+  const u=currentUser();
+  return {id:u.id,name:u.name,color:u.color};
+}
+
+function renderEditor() {
+  const doc=state.docs[currentDocId];
+  const owner=state.users[doc.ownerId];
+  const role=roleFor(doc);
+  const editable=canEdit(doc);
+
+  $("#docTitle").value=doc.title;
+  $("#docTitle").disabled=role!=="owner";
+  $("#docRoleLabel").textContent=`Your role: ${role}`;
+  $("#docOwnerLabel").textContent=`Owner: ${owner?owner.name:"—"}`;
+
+  const editor=$("#editor");
+  isRemoteUpdate=true;
+  editor.innerHTML=doc.content||"";
+  isRemoteUpdate=false;
+  editor.setAttribute("contenteditable",editable?"true":"false");
+  $("#toolbar").style.opacity=editable?"1":".45";
+  $("#toolbar").style.pointerEvents=editable?"auto":"none";
+
+  setSaveStatus("saved");
+  renderHistory(); renderComments(); renderChat(); renderPresence();
+}
+
+function setSaveStatus(kind) {
+  const el=$("#saveStatus");
+  el.classList.remove("saving","error");
+  if(kind==="saving"){ el.classList.add("saving"); el.querySelector(".txt").textContent="Saving…"; }
+  else if(kind==="error"){ el.classList.add("error"); el.querySelector(".txt").textContent="Offline — will retry"; }
+  else { el.querySelector(".txt").textContent="Saved · "+fmtTime(Date.now()); }
+}
+
+function scheduleSave() {
+  setSaveStatus("saving");
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const doc=state.docs[currentDocId];
+    if(!doc) return;
+    doc.content=$("#editor").innerHTML;
+    doc.title=$("#docTitle").value||"Untitled document";
+    doc.updatedAt=Date.now();
+    saveState();
+    setSaveStatus(navigator.onLine?"saved":"error");
+  },400);
+}
+
+/* toolbar */
+$("#toolbar").addEventListener("click",(e)=>{
+  const btn=e.target.closest("button");
+  if(!btn) return;
+  if(btn.dataset.cmd) document.execCommand(btn.dataset.cmd,false,null);
+  else if(btn.dataset.block) {
+    const tag=btn.dataset.block==="p"?"P":btn.dataset.block.toUpperCase();
+    document.execCommand("formatBlock",false,tag);
+  }
+  $("#editor").focus(); onLocalEdit();
+});
+
+/* ==========================================================================
+   REAL-TIME SYNC
+   ========================================================================== */
+$("#editor").addEventListener("input",onLocalEdit);
+$("#docTitle").addEventListener("input",onLocalEdit);
+
+function onLocalEdit() {
+  if(isRemoteUpdate||!currentDocId) return;
+  const doc=state.docs[currentDocId];
+  if(!canEdit(doc)) return;
+  doc.content=$("#editor").innerHTML;
+  doc.title=$("#docTitle").value||"Untitled document";
+  doc.updatedAt=Date.now();
+  broadcast({type:"doc:update",docId:currentDocId,title:doc.title,content:doc.content,updatedAt:doc.updatedAt,by:session.userId});
+  scheduleSave();
+}
+
+document.addEventListener("selectionchange",()=>{
+  if(!currentDocId) return;
+  const sel=window.getSelection();
+  if(!sel||sel.rangeCount===0) return;
+  const range=sel.getRangeAt(0);
+  const editor=$("#editor");
+  if(!editor.contains(range.startContainer)) return;
+  const rect=range.getBoundingClientRect();
+  const eRect=editor.getBoundingClientRect();
+  broadcast({type:"presence:cursor",docId:currentDocId,userId:session.userId,
+    x:rect.left-eRect.left+editor.scrollLeft,
+    y:rect.top-eRect.top+editor.scrollTop,
+    h:rect.height||18});
+});
+
+function broadcast(msg) {
+  if(!channel) return;
+  try { channel.postMessage(msg); } catch(e){ console.warn("broadcast failed",e); }
+}
+
+if(channel) {
+  channel.onmessage=(event)=>{
+    const msg=event.data;
+    if(!msg||!msg.type) return;
+    switch(msg.type) {
+      case "doc:update":      handleRemoteUpdate(msg);  break;
+      case "doc:deleted":     handleRemoteDelete(msg);  break;
+      case "presence:join":   handlePresenceJoin(msg);  break;
+      case "presence:leave":  handlePresenceLeave(msg); break;
+      case "presence:ping":   handlePresencePing(msg);  break;
+      case "presence:cursor": handleRemoteCursor(msg);  break;
+      case "doc:history":     handleRemoteHistory(msg); break;
+      case "doc:comment":     handleRemoteComment(msg); break;
+      case "doc:chat":        handleRemoteChat(msg);    break;
+      case "doc:invite":      handleRemoteInvite(msg);  break;
+    }
+  };
+}
+
+function handleRemoteUpdate(msg) {
+  const doc=state.docs[msg.docId];
+  if(!doc) return;
+  if(msg.updatedAt<(doc.updatedAt||0)) return;
+  doc.title=msg.title; doc.content=msg.content; doc.updatedAt=msg.updatedAt;
+  saveState();
+  if(currentDocId===msg.docId&&msg.by!==session.userId) {
+    isRemoteUpdate=true;
+    const editor=$("#editor");
+    editor.innerHTML=doc.content;
+    $("#docTitle").value=doc.title;
+    isRemoteUpdate=false;
+    setSaveStatus("saved");
+  } else if(currentDocId!==msg.docId) { renderDashboard(); }
+}
+
+function handleRemoteDelete(msg) {
+  if(state.docs[msg.docId]){ delete state.docs[msg.docId]; saveState(); }
+  if(currentDocId===msg.docId){ toast("This document was deleted by the owner."); showDashboard(); }
+  else renderDashboard();
+}
+
+/* ==========================================================================
+   PRESENCE
+   ========================================================================== */
+const presence=new Map();
+
+function startPresence() {
+  presence.clear();
+  presence.set(session.userId,{...publicUser(),lastPing:Date.now()});
+  stopPresence();
+  presenceTimer=setInterval(()=>{
+    broadcast({type:"presence:ping",docId:currentDocId,user:publicUser()});
+    const now=Date.now();
+    for(const [uid,p] of presence) {
+      if(uid!==session.userId&&now-p.lastPing>10000) p.offline=true;
+    }
+    renderPresence();
+  },4000);
+}
+function stopPresence() {
+  if(presenceTimer){clearInterval(presenceTimer);presenceTimer=null;}
+  $$(".remote-cursor").forEach(el=>el.remove());
+}
+
+function handlePresenceJoin(msg) {
+  if(msg.docId!==currentDocId) return;
+  presence.set(msg.user.id,{...msg.user,lastPing:Date.now()});
+  broadcast({type:"presence:ping",docId:currentDocId,user:publicUser()});
+  renderPresence();
+  if(msg.user.id!==session.userId) toast(`${msg.user.name} joined the document.`);
+}
+function handlePresenceLeave(msg) {
+  if(msg.docId!==currentDocId) return;
+  presence.delete(msg.userId); removeRemoteCursor(msg.userId); renderPresence();
+}
+function handlePresencePing(msg) {
+  if(msg.docId!==currentDocId) return;
+  presence.set(msg.user.id,{...msg.user,lastPing:Date.now(),offline:false});
+  renderPresence();
+}
+
+function renderPresence() {
+  const list=$("#presenceList");
+  if(!currentDocId){list.innerHTML="";return;}
+  const items=[...presence.values()];
+  items.sort((a,b)=>a.id===session.userId?-1:1);
+  list.innerHTML=items.map(u=>`
+    <div class="presence-item ${u.offline?"offline":""}">
+      <span class="avatar" style="background:${u.color};width:28px;height:28px;font-size:.7rem;">${initials(u.name)}</span>
+      <div>
+        <div class="name">${escapeHtml(u.name)} ${u.id===session.userId?"<span style='color:var(--text-dim);font-weight:400;'>(you)</span>":""}</div>
+        <div class="role">${u.offline?"Reconnecting…":"Online"}</div>
+      </div>
+      <span class="status-dot"></span>
+    </div>`).join("")||`<div class="role" style="color:var(--text-dim);font-size:.8rem;">Just you here.</div>`;
+}
+
+function handleRemoteCursor(msg) {
+  if(msg.docId!==currentDocId||msg.userId===session.userId) return;
+  const u=presence.get(msg.userId); if(!u) return;
+  let el=document.getElementById("cursor-"+msg.userId);
+  const editor=$("#editor");
+  if(!el){
+    el=document.createElement("div");
+    el.className="remote-cursor"; el.id="cursor-"+msg.userId;
+    el.innerHTML=`<div class="flag"></div>`;
+    editor.appendChild(el);
+  }
+  el.style.background=u.color; el.style.height=(msg.h||18)+"px";
+  el.style.left=msg.x+"px"; el.style.top=msg.y+"px";
+  const flag=el.querySelector(".flag");
+  flag.textContent=u.name; flag.style.background=u.color;
+}
+function removeRemoteCursor(userId) { const el=document.getElementById("cursor-"+userId); if(el)el.remove(); }
+
+/* ==========================================================================
+   VERSION HISTORY
+   ========================================================================== */
+$("#snapshotBtn").addEventListener("click",()=>{
+  const doc=state.docs[currentDocId];
+  if(!doc||!canEdit(doc)) return;
+  const snap={id:uid("v"),savedAt:Date.now(),savedBy:session.userId,content:doc.content,title:doc.title};
+  doc.history.unshift(snap);
+  if(doc.history.length>25) doc.history.pop();
+  saveState();
+  broadcast({type:"doc:history",docId:currentDocId,snapshot:snap});
+  renderHistory(); toast("Version saved.");
+});
+
+function handleRemoteHistory(msg) {
+  const doc=state.docs[msg.docId]; if(!doc) return;
+  if(!doc.history.find(h=>h.id===msg.snapshot.id)){
+    doc.history.unshift(msg.snapshot); saveState();
+    if(currentDocId===msg.docId) renderHistory();
+  }
+}
+
+function renderHistory() {
+  const doc=state.docs[currentDocId]; if(!doc) return;
+  const list=$("#historyList");
+  if(doc.history.length===0){
+    list.innerHTML=`<p style="color:var(--text-dim);font-size:.8rem;">No versions saved yet.</p>`;return;
+  }
+  list.innerHTML=doc.history.map(h=>{
+    const u=state.users[h.savedBy];
+    return `<div class="history-item">
+      <div><strong>${escapeHtml(h.title||"Untitled")}</strong></div>
+      <div class="when">By ${escapeHtml(u?u.name:"Unknown")} · ${fmtTime(h.savedAt)}</div>
+      <button data-restore="${h.id}">Restore</button>
+    </div>`;
+  }).join("");
+  list.querySelectorAll("[data-restore]").forEach(b=>b.addEventListener("click",()=>restoreVersion(b.dataset.restore)));
+}
+
+function restoreVersion(versionId) {
+  const doc=state.docs[currentDocId]; if(!doc||!canEdit(doc)) return;
+  const snap=doc.history.find(h=>h.id===versionId); if(!snap) return;
+  if(!confirm("Restore this version? Current content will be overwritten.")) return;
+  doc.content=snap.content; doc.title=snap.title; doc.updatedAt=Date.now();
+  saveState();
+  isRemoteUpdate=true; $("#editor").innerHTML=doc.content; $("#docTitle").value=doc.title; isRemoteUpdate=false;
+  broadcast({type:"doc:update",docId:currentDocId,title:doc.title,content:doc.content,updatedAt:doc.updatedAt,by:session.userId});
+  toast("Version restored.");
+}
+
+/* ==========================================================================
+   COMMENTS + CHAT
+   ========================================================================== */
+$("#commentSend").addEventListener("click",()=>sendComment());
+$("#commentInput").addEventListener("keydown",(e)=>{if(e.key==="Enter")sendComment();});
+$("#chatSend").addEventListener("click",()=>sendChat());
+$("#chatInput").addEventListener("keydown",(e)=>{if(e.key==="Enter")sendChat();});
+
+function sendComment() {
+  const input=$("#commentInput"), text=input.value.trim();
+  if(!text||!currentDocId) return;
+  const c={id:uid("c"),by:session.userId,name:currentUser().name,text,at:Date.now()};
+  state.docs[currentDocId].comments.unshift(c); saveState();
+  broadcast({type:"doc:comment",docId:currentDocId,comment:c});
+  input.value=""; renderComments();
+}
+function handleRemoteComment(msg) {
+  const doc=state.docs[msg.docId]; if(!doc) return;
+  if(!doc.comments.find(c=>c.id===msg.comment.id)){
+    doc.comments.unshift(msg.comment); saveState();
+    if(currentDocId===msg.docId) renderComments();
+  }
+}
+function renderComments() {
+  const doc=state.docs[currentDocId];
+  const list=$("#commentsList");
+  if(!doc.comments.length){list.innerHTML=`<p style="color:var(--text-dim);font-size:.8rem;">No notes yet.</p>`;return;}
+  list.innerHTML=doc.comments.map(c=>`
+    <div class="comment-item">
+      <div><strong>${escapeHtml(c.name)}</strong></div>
+      <div>${escapeHtml(c.text)}</div>
+      <div class="when">${fmtTime(c.at)}</div>
+    </div>`).join("");
+}
+
+function sendChat() {
+  const input=$("#chatInput"), text=input.value.trim();
+  if(!text||!currentDocId) return;
+  const m={id:uid("m"),by:session.userId,name:currentUser().name,text,at:Date.now()};
+  state.docs[currentDocId].chat.push(m); saveState();
+  broadcast({type:"doc:chat",docId:currentDocId,message:m});
+  input.value=""; renderChat();
+}
+function handleRemoteChat(msg) {
+  const doc=state.docs[msg.docId]; if(!doc) return;
+  if(!doc.chat.find(c=>c.id===msg.message.id)){
+    doc.chat.push(msg.message); saveState();
+    if(currentDocId===msg.docId) renderChat();
+  }
+}
+function renderChat() {
+  const doc=state.docs[currentDocId];
+  const list=$("#chatList");
+  if(!doc.chat.length){list.innerHTML=`<p style="color:var(--text-dim);font-size:.8rem;">No messages yet.</p>`;return;}
+  list.innerHTML=doc.chat.map(m=>`
+    <div class="chat-msg">
+      <div><strong>${escapeHtml(m.name)}</strong> <span class="when">· ${fmtTime(m.at)}</span></div>
+      <div>${escapeHtml(m.text)}</div>
+    </div>`).join("");
+  list.scrollTop=list.scrollHeight;
+}
+
+/* ==========================================================================
+   SHARING
+   ========================================================================== */
+$("#shareBtn").addEventListener("click",()=>openShareModal());
+
+function openShareModal() {
+  const doc=state.docs[currentDocId]; if(!doc) return;
+  const url=`${location.origin}${location.pathname}?invite=${doc.id}&role=editor`;
+  $("#inviteLink").textContent=url;
+  const list=$("#inviteList");
+  const entries=Object.entries(doc.permissions);
+  list.innerHTML=entries.length===0
+    ?`<p style="color:var(--text-dim);font-size:.8rem;">No collaborators yet.</p>`
+    :entries.map(([uid,role])=>{
+        const u=state.users[uid];
+        return `<div class="invite-row">
+          <span>${escapeHtml(u?u.name:uid)} <small style="color:var(--text-dim);">· ${role}</small></span>
+          ${doc.ownerId===session.userId?`<button class="btn-danger" data-remove="${uid}">Remove</button>`:""}
+        </div>`;
+      }).join("");
+  list.querySelectorAll("[data-remove]").forEach(b=>b.addEventListener("click",()=>{
+    delete doc.permissions[b.dataset.remove]; saveState(); openShareModal();
+  }));
+  openModal("shareModal");
+}
+
+$("#inviteSend").addEventListener("click",()=>{
+  const email=$("#inviteEmail").value.trim(), role=$("#inviteRole").value;
+  if(!email){toast("Please enter an email.");return;}
+  const doc=state.docs[currentDocId];
+  const userId="u_"+btoa(email.toLowerCase()).replace(/[^a-zA-Z0-9]/g,"").slice(0,14);
+  if(!state.users[userId]) {
+    state.users[userId]={id:userId,name:email.split("@")[0],email,color:colorFromString(userId),provider:"invite"};
+  }
+  doc.permissions[userId]=role; saveState();
+  broadcast({type:"doc:invite",docId:doc.id,userId,role});
+  $("#inviteEmail").value=""; openShareModal(); toast(`Invited ${email} as ${role}.`);
+});
+
+$("#copyLinkBtn").addEventListener("click",()=>{
+  const text=$("#inviteLink").textContent;
+  navigator.clipboard?.writeText(text).then(
+    ()=>toast("Link copied to clipboard."),
+    ()=>toast("Copy failed — select the link manually.")
+  );
+});
+
+function handleRemoteInvite(msg) {
+  const doc=state.docs[msg.docId]; if(!doc) return;
+  doc.permissions[msg.userId]=msg.role; saveState();
+  if(msg.userId===session?.userId){
+    toast(`You were given ${msg.role} access on "${doc.title}".`); renderDashboard();
+  }
+}
+
+function acceptInvite(docId,role) {
+  if(!session) return;
+  const doc=state.docs[docId];
+  if(doc.ownerId===session.userId) return;
+  if(!doc.permissions[session.userId]){
+    doc.permissions[session.userId]=role==="viewer"?"viewer":"editor";
+    saveState(); toast(`You joined "${doc.title}" as ${doc.permissions[session.userId]}.`);
+  }
+  renderDashboard();
+}
+
+/* ==========================================================================
+   CONNECTION + THEME
+   ========================================================================== */
+function refreshConnectionPill() {
+  const pill=$("#connectionPill");
+  if(navigator.onLine){
+    pill.textContent="● Online"; pill.classList.add("online"); pill.classList.remove("offline");
+  } else {
+    pill.textContent="● Reconnecting…"; pill.classList.add("offline"); pill.classList.remove("online");
+  }
+}
+window.addEventListener("online",()=>{
+  refreshConnectionPill(); toast("Back online — syncing changes.");
+  if(currentDocId){
+    const doc=state.docs[currentDocId];
+    broadcast({type:"doc:update",docId:currentDocId,title:doc.title,content:doc.content,updatedAt:doc.updatedAt,by:session.userId});
+  }
+  setSaveStatus("saved");
+});
+window.addEventListener("offline",()=>{ refreshConnectionPill(); setSaveStatus("error"); toast("You went offline — edits will sync when you're back."); });
+
+$("#themeToggle").addEventListener("click",()=>{
+  const cur=document.body.dataset.theme;
+  const next=cur==="dark"?"light":"dark";
+  document.body.dataset.theme=next;
+  $("#themeToggle").textContent=next==="dark"?"☀️":"🌙";
+  localStorage.setItem("teyzixdocs.theme",next);
+});
+
+const savedTheme=localStorage.getItem("teyzixdocs.theme");
+if(savedTheme){ document.body.dataset.theme=savedTheme; $("#themeToggle").textContent=savedTheme==="dark"?"☀️":"🌙"; }
+
+/* ==========================================================================
+   EVENT WIRING
+   ========================================================================== */
+$$("[data-sso]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const provider=btn.dataset.sso;
+    const name=$("#loginName").value.trim()||prompt(`Continuing with ${provider}. What's your name?`)||"Guest";
+    const email=$("#loginEmail").value.trim()||`${name.toLowerCase().replace(/\s+/g,".")}@${provider}.demo`;
+    signIn({name,email,provider});
+  });
+});
+
+$("#loginBtn").addEventListener("click",()=>{
+  signIn({name:$("#loginName").value.trim(),email:$("#loginEmail").value.trim(),provider:"email"});
+});
+
+$("#logoutBtn").addEventListener("click",signOut);
+$("#backBtn").addEventListener("click",showDashboard);
+$("#newDocBtn").addEventListener("click",createDoc);
+
+$$(".tabs button").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const tab=btn.dataset.tab;
+    $$(".tabs button").forEach(b=>b.classList.toggle("active",b===btn));
+    $$(".tab-pane").forEach(p=>p.classList.toggle("active",p.id==="tab-"+tab));
+  });
+});
+
+$("#renameSave").addEventListener("click",()=>{
+  const id=$("#renameInput").dataset.target;
+  const newName=$("#renameInput").value.trim();
+  if(id&&newName){
+    state.docs[id].title=newName; state.docs[id].updatedAt=Date.now(); saveState();
+    broadcast({type:"doc:update",docId:id,title:newName,content:state.docs[id].content,updatedAt:state.docs[id].updatedAt,by:session.userId});
+    renderDashboard(); toast("Renamed.");
+  }
+  closeModal("renameModal");
+});
+
+/* ==========================================================================
+   BOOT
+   ========================================================================== */
+refreshConnectionPill();
+if(session&&state.users[session.userId]){ enterApp(); }
+else { showLogin(); }
+</script>
+</body>
+</html>
